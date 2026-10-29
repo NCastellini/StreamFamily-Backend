@@ -24,7 +24,9 @@ type RequiredVar = keyof typeof DEV_DEFAULTS;
 function readNodeEnv(): NodeEnv {
   const raw = process.env.NODE_ENV?.trim() || 'development';
   if (raw === 'development' || raw === 'production' || raw === 'test') return raw;
-  throw new Error(`NODE_ENV inválido: "${raw}". Valores permitidos: development, production, test.`);
+  throw new Error(
+    `NODE_ENV inválido: "${raw}". Valores permitidos: development, production, test.`,
+  );
 }
 
 function loadEnv(): Env {
@@ -68,9 +70,7 @@ function loadEnv(): Env {
   }
 
   if (errors.length > 0) {
-    throw new Error(
-      `Configuración inválida (NODE_ENV=${NODE_ENV}):\n  - ${errors.join('\n  - ')}`,
-    );
+    throw new Error(`Configuración inválida (NODE_ENV=${NODE_ENV}):\n  - ${errors.join('\n  - ')}`);
   }
 
   return Object.freeze({
