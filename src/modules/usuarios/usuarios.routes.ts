@@ -1,4 +1,14 @@
 import { Router } from 'express';
+import {
+  actualizarUsuario,
+  cambiarEstadoUsuario,
+  crearUsuario,
+  eliminarUsuario,
+  listarUsuarios,
+  obtenerUsuario,
+  reemplazarUsuario,
+  resetearPasswordUsuario,
+} from './usuarios.controller';
 
 /**
  * Módulo: Usuarios (gestión por el administrador)
@@ -6,3 +16,12 @@ import { Router } from 'express';
  * Montado en: /api/v1/usuarios
  */
 export const usuariosRouter = Router();
+
+usuariosRouter.get('/', listarUsuarios);
+usuariosRouter.get('/:id', obtenerUsuario);
+usuariosRouter.post('/', crearUsuario);
+usuariosRouter.put('/:id', reemplazarUsuario);
+usuariosRouter.patch('/:id', actualizarUsuario);
+usuariosRouter.patch('/:id/estado', cambiarEstadoUsuario);
+usuariosRouter.post('/:id/reset-password', resetearPasswordUsuario);
+usuariosRouter.delete('/:id', eliminarUsuario);
