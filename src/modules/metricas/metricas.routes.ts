@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { obtenerMetricas } from './metricas.controller';
 
 /**
  * Módulo: Métricas generales del sistema (solo administrador, datos agregados)
@@ -6,3 +7,5 @@ import { Router } from 'express';
  * Montado en: /api/v1/admin/metricas
  */
 export const metricasRouter = Router();
+
+metricasRouter.get('/', obtenerMetricas);
