@@ -6,3 +6,6 @@ export interface MedioPago {
   tipo: TipoMedioPago;
   ultimosDigitos: string | null;
 }
+
+export type CreateMedioPagoDto = Omit<MedioPago, 'id'>;
+export type UpdateMedioPagoDto = Partial<CreateMedioPagoDto>;
