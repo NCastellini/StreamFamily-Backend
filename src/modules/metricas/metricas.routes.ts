@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireRole, verifyToken } from '../../middlewares/auth.middleware';
 import { obtenerMetricas } from './metricas.controller';
 
 /**
@@ -7,5 +8,6 @@ import { obtenerMetricas } from './metricas.controller';
  * Montado en: /api/v1/admin/metricas
  */
 export const metricasRouter = Router();
+metricasRouter.use(verifyToken, requireRole('admin'));
 
 metricasRouter.get('/', obtenerMetricas);

@@ -1,6 +1,7 @@
 import type { ListResult } from '../../types/api.types';
 import { HttpError } from '../../utils/HttpError';
 import { listQuery } from '../../utils/listQuery';
+import { list as listSuscripciones } from '../suscripciones/suscripciones.service';
 import { categoriasMock } from './categorias.mock';
 import type { Categoria } from './categorias.types';
 import {
@@ -65,6 +66,10 @@ export function update(id: unknown, body: unknown, partial = true): Categoria {
 
 export function remove(id: unknown): Categoria {
   const categoria = find(id);
+  const asociadas = listSuscripciones({ categoriaId: String(categoria.id), limit: '1' });
+  if (asociadas.meta.total > 0) {
+    throw HttpError.conflict('No se puede eliminar una categoría con suscripciones asociadas');
+  }
   categorias.splice(categorias.indexOf(categoria), 1);
   return { ...categoria };
 }

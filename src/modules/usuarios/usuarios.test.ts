@@ -3,11 +3,14 @@ import type { Server } from 'node:http';
 import { after, before, test } from 'node:test';
 import { app } from '../../app';
 import type { ApiResponse, PaginationMeta } from '../../types/api.types';
+import { login } from '../auth/auth.service';
 import { verifyCredentials } from './usuarios.service';
 import type { UsuarioPublico } from './usuarios.types';
 
 let server: Server;
 let baseUrl: string;
+let adminToken: string;
+let clientToken: string;
 
 before(async () => {
   await new Promise<void>((resolve, reject) => {
@@ -19,6 +22,8 @@ before(async () => {
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
   baseUrl = `http://127.0.0.1:${address.port}/api/v1/usuarios`;
+  adminToken = (await login({ identifier: 'lucia.fernandez', password: 'AdminDemo123!' })).token;
+  clientToken = (await login({ identifier: 'martin.gomez', password: 'ClienteDemo123!' })).token;
 });
 
 after(async () => {
@@ -35,7 +40,10 @@ async function request<T = UsuarioPublico>(
 ): Promise<{ status: number; body: ApiResponse<T> }> {
   const response = await fetch(baseUrl + path, {
     method,
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${adminToken}`,
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = (await response.json()) as ApiResponse<T>;
@@ -46,6 +54,34 @@ async function request<T = UsuarioPublico>(
 }
 
 test('Usuarios: contrato, CRUD, filtros y credenciales', async (t) => {
+  await t.test('Todas las rutas exigen JWT y rol administrador', async () => {
+    const routes = [
+      ['', 'GET'],
+      ['/1', 'GET'],
+      ['', 'POST'],
+      ['/1', 'PUT'],
+      ['/1', 'PATCH'],
+      ['/1/estado', 'PATCH'],
+      ['/1/reset-password', 'POST'],
+      ['/1', 'DELETE'],
+    ];
+    for (const [path, method] of routes) {
+      assert.equal((await fetch(baseUrl + path, { method })).status, 401);
+      const denied = await fetch(baseUrl + path, {
+        method,
+        headers: { Authorization: `Bearer ${clientToken}` },
+      });
+      assert.equal(denied.status, 403);
+    }
+    assert.equal(
+      (
+        await fetch(baseUrl, {
+          headers: { Authorization: 'Bearer token-invalido' },
+        })
+      ).status,
+      401,
+    );
+  });
   await t.test('15 usuarios completos sin hashes; paginado, orden y límite', async () => {
     const result = await request<UsuarioPublico[]>('?page=2&limit=5&sortBy=id&order=desc');
     assert.equal(result.status, 200);

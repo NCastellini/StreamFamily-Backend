@@ -4,12 +4,28 @@ import { after, before, test } from 'node:test';
 import { app } from '../../app';
 import type { ApiResponse } from '../../types/api.types';
 import { listQuery } from '../../utils/listQuery';
+import { login } from '../auth/auth.service';
+import * as gruposService from '../grupos/grupos.service';
+import * as suscripcionesService from '../suscripciones/suscripciones.service';
 import * as usuarios from '../usuarios/usuarios.service';
 import { calculateMetricas, configureMetricasSources, getMetricas } from './metricas.service';
 import type { Metricas, SuscripcionMetricas, UsuarioMetricas } from './metricas.types';
 
 let server: Server;
 let baseUrl: string;
+let adminToken: string;
+let clientToken: string;
+
+function restoreSources(): void {
+  configureMetricasSources({
+    listGrupos: gruposService.list,
+    listSuscripciones: suscripcionesService.list,
+  });
+}
+
+function adminRequest(path = ''): Promise<Response> {
+  return fetch(baseUrl + path, { headers: { Authorization: `Bearer ${adminToken}` } });
+}
 
 before(async () => {
   await new Promise<void>((resolve, reject) => {
@@ -21,9 +37,12 @@ before(async () => {
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
   baseUrl = `http://127.0.0.1:${address.port}/api/v1/admin/metricas`;
+  adminToken = (await login({ identifier: 'lucia.fernandez', password: 'AdminDemo123!' })).token;
+  clientToken = (await login({ identifier: 'martin.gomez', password: 'ClienteDemo123!' })).token;
 });
 
 after(async () => {
+  restoreSources();
   await new Promise<void>((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
     server.closeAllConnections();
@@ -31,14 +50,121 @@ after(async () => {
 });
 
 test('Métricas: cálculos e integración mediante services', async (t) => {
-  await t.test('Ruta exacta y 503 explícito hasta conectar dependencias', async () => {
-    const response = await fetch(baseUrl);
-    assert.equal(response.status, 503);
-    const body = (await response.json()) as ApiResponse<null>;
-    assert.equal(body.code, 503);
-    assert.equal(body.data, null);
-    assert.match(body.msg, /pendientes de integrar/);
-    assert.equal((await fetch(baseUrl + '/metricas')).status, 404);
+  await t.test('Solo administradores acceden a datos agregados', async () => {
+    assert.equal((await fetch(baseUrl)).status, 401);
+    assert.equal(
+      (
+        await fetch(baseUrl, {
+          headers: { Authorization: `Bearer ${clientToken}` },
+        })
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await fetch(baseUrl, {
+          headers: { Authorization: 'Bearer token-invalido' },
+        })
+      ).status,
+      401,
+    );
+    assert.equal((await adminRequest('/metricas')).status, 404);
+  });
+
+  await t.test(
+    'Endpoint conectado por defecto y actualizado desde los services reales',
+    async () => {
+      const response = await adminRequest();
+      assert.equal(response.status, 200);
+      const body = (await response.json()) as ApiResponse<Metricas>;
+      assert.equal(body.code, 200);
+      assert.equal(body.data.totalUsuarios, 14);
+      assert.equal(body.data.totalGrupos, 5);
+      const todas = suscripcionesService.getAll();
+      const activas = todas.filter((item) => item.estado === 'activa');
+      assert.equal(body.data.suscripcionesActivas, activas.length);
+      const gasto = activas
+        .filter((item) => item.usuarioId >= 2 && item.usuarioId <= 14)
+        .reduce(
+          (sum, item) =>
+            sum +
+            (item.costo * (item.moneda === 'USD' ? 1200 : 1)) /
+              (item.frecuencia === 'anual' ? 12 : item.frecuencia === 'trimestral' ? 3 : 1),
+          0,
+        );
+      assert.equal(
+        body.data.gastoPromedioPorUsuario,
+        Math.round((gasto / 13 + Number.EPSILON) * 100) / 100,
+      );
+      assert.deepEqual(
+        Object.keys(body.data).sort(),
+        [
+          'totalUsuarios',
+          'totalGrupos',
+          'suscripcionesActivas',
+          'plataformasMasContratadas',
+          'gastoPromedioPorUsuario',
+          'monedaReferencia',
+          'periodo',
+          'cotizacionUsdArs',
+        ].sort(),
+      );
+      assert.ok(!('meta' in body));
+      const grupo = gruposService.create({
+        nombre: 'Integración métricas',
+        administradorId: 2,
+        miembros: [2, 3],
+      });
+      const suscripcion = suscripcionesService.create({
+        plataforma: 'Prueba integración métricas',
+        plan: 'Compartido',
+        costo: 1300,
+        moneda: 'ARS',
+        frecuencia: 'mensual',
+        fechaCobro: '2026-12-01',
+        estado: 'activa',
+        usuarioId: 2,
+        grupoId: grupo.id,
+        categoriaId: 1,
+        medioPagoId: 1,
+      });
+      try {
+        const updatedResponse = await adminRequest();
+        assert.equal(updatedResponse.status, 200);
+        const updated = (await updatedResponse.json()) as ApiResponse<Metricas>;
+        assert.equal(updated.data.totalGrupos, 6);
+        assert.equal(updated.data.suscripcionesActivas, activas.length + 1);
+        assert.equal(
+          updated.data.gastoPromedioPorUsuario,
+          Math.round(((gasto + 1300) / 13 + Number.EPSILON) * 100) / 100,
+        );
+        assert.ok(
+          updated.data.plataformasMasContratadas.some(
+            (item) => item.nombre === suscripcion.plataforma && item.cantidad === 1,
+          ),
+        );
+        suscripcionesService.update(suscripcion.id, { estado: 'pausada' });
+        assert.equal((await getMetricas()).suscripcionesActivas, activas.length);
+      } finally {
+        suscripcionesService.remove(suscripcion.id);
+        gruposService.remove(grupo.id);
+      }
+      assert.deepEqual(await getMetricas(), body.data);
+    },
+  );
+
+  await t.test('Fuentes ausentes siguen devolviendo 503 explícito', async () => {
+    configureMetricasSources(undefined);
+    try {
+      const response = await adminRequest();
+      assert.equal(response.status, 503);
+      const body = (await response.json()) as ApiResponse<null>;
+      assert.equal(body.code, 503);
+      assert.equal(body.data, null);
+      assert.match(body.msg, /pendientes de integrar/);
+    } finally {
+      restoreSources();
+    }
   });
 
   await t.test('Conversión monetaria, frecuencias y exclusión de inactivas', () => {
@@ -174,7 +300,7 @@ test('Métricas: cálculos e integración mediante services', async (t) => {
         return listQuery(suscripciones, query, { defaultSortBy: 'id' });
       },
     });
-    const response = await fetch(baseUrl);
+    const response = await adminRequest();
     assert.equal(response.status, 200);
     const body = (await response.json()) as ApiResponse<Metricas>;
     assert.equal(body.data.totalUsuarios, 14);
@@ -225,5 +351,10 @@ test('Métricas: cálculos e integración mediante services', async (t) => {
       listSuscripciones: () => listQuery([], {}),
     });
     await assert.rejects(getMetricas(), /duplicados/);
+    const response = await adminRequest();
+    assert.equal(response.status, 503);
+    const body = (await response.json()) as ApiResponse<null>;
+    assert.equal(body.data, null);
+    restoreSources();
   });
 });
