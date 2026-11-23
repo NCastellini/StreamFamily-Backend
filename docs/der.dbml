@@ -1,0 +1,152 @@
+Enum rol_usuario {
+  admin
+  cliente
+}
+
+// Estados de usuario (baja lógica):
+//   activo    : cuenta habilitada para iniciar sesión.
+//   bloqueado : bloqueo temporal; puede reactivarse.
+//   inactivo  : cuenta dada de baja lógicamente; se conserva el registro y sus relaciones.
+// El endpoint de bloqueo/reactivación no permite recuperar cuentas inactivas.
+Enum estado_usuario {
+  activo
+  bloqueado
+  inactivo
+}
+
+Enum moneda {
+  ARS
+  USD
+}
+
+Enum frecuencia_suscripcion {
+  mensual
+  trimestral
+  anual
+}
+
+Enum estado_suscripcion {
+  activa
+  pausada
+  cancelada
+}
+
+Enum tipo_medio_pago {
+  tarjeta_credito
+  tarjeta_debito
+  billetera
+  transferencia
+}
+
+Enum estado_pago {
+  pagado
+  pendiente
+}
+
+Enum estado_alerta {
+  activa
+  descartada
+}
+
+Enum canal_alerta {
+  email
+}
+
+Table usuarios {
+  id int [pk, increment]
+  nombre varchar [not null]
+  apellido varchar [not null]
+  email varchar [not null, unique]
+  username varchar [not null, unique]
+  passwordHash varchar [not null, note: 'Hash bcrypt, también presente en los mocks. Nunca se devuelve en la API.']
+  rol rol_usuario [not null]
+  estado estado_usuario [not null]
+  creadoEn timestamp [not null]
+}
+
+Table categorias {
+  id int [pk, increment]
+  nombre varchar [not null]
+  descripcion varchar [not null]
+}
+
+Table grupos {
+  id int [pk, increment]
+  nombre varchar [not null]
+  administradorId int [not null]
+  creadoEn timestamp [not null]
+}
+
+Table grupo_usuario {
+  grupoId int [not null]
+  usuarioId int [not null]
+
+  indexes {
+    (grupoId, usuarioId) [pk]
+  }
+
+  Note: 'Tabla intermedia que representa los miembros de cada grupo. La clave compuesta evita membresías duplicadas.'
+}
+
+Table medios_pago {
+  id int [pk, increment]
+  nombre varchar [not null]
+  tipo tipo_medio_pago [not null]
+  ultimosDigitos varchar(4) [null, note: 'Referencia opcional. Nunca almacenar el número completo de tarjeta.']
+}
+
+Table suscripciones {
+  id int [pk, increment]
+  plataforma varchar [not null]
+  plan varchar [not null]
+  costo decimal(12,2) [not null]
+  moneda moneda [not null]
+  frecuencia frecuencia_suscripcion [not null]
+  fechaCobro date [not null]
+  estado estado_suscripcion [not null]
+  usuarioId int [not null]
+  grupoId int [null, note: 'NULL para suscripciones individuales.']
+  categoriaId int [not null]
+  medioPagoId int [not null]
+  creadaEn timestamp [not null]
+}
+
+Table pagos {
+  id int [pk, increment]
+  suscripcionId int [not null]
+  fecha date [not null]
+  monto decimal(12,2) [not null]
+  moneda moneda [not null]
+  medioPagoId int [not null]
+  estado estado_pago [not null]
+}
+
+Table alertas {
+  id int [pk, increment]
+  suscripcionId int [not null]
+  usuarioId int [not null]
+  diasAnticipacion int [not null]
+  fechaAviso date [not null]
+  canal canal_alerta [not null]
+  estado estado_alerta [not null]
+  creadaEn timestamp [not null]
+}
+
+// Administrador y miembros de los grupos
+Ref: grupos.administradorId > usuarios.id
+Ref: grupo_usuario.grupoId > grupos.id
+Ref: grupo_usuario.usuarioId > usuarios.id
+
+// Relaciones de las suscripciones
+Ref: suscripciones.usuarioId > usuarios.id
+Ref: suscripciones.grupoId >? grupos.id
+Ref: suscripciones.categoriaId > categorias.id
+Ref: suscripciones.medioPagoId > medios_pago.id
+
+// Historial de pagos
+Ref: pagos.suscripcionId > suscripciones.id
+Ref: pagos.medioPagoId > medios_pago.id
+
+// Alertas y destinatarios
+Ref: alertas.suscripcionId > suscripciones.id
+Ref: alertas.usuarioId > usuarios.id
