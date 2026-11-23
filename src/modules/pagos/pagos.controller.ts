@@ -1,4 +1,4 @@
-import { NextFunction, Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { ok, created } from '../../utils/response';
 import { HttpError } from '../../utils/HttpError';
 import * as service from './pagos.service';

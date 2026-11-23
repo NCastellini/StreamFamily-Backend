@@ -1,4 +1,4 @@
-import { NextFunction, Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { HttpError } from '../../utils/HttpError';
 
 const MONEDAS = ['ARS', 'USD'];

@@ -1,4 +1,4 @@
-import { Pago } from './pagos.types';
+import type { Pago } from './pagos.types';
 
 const montos = [4500, 8900, 12000, 15, 9.99, 2300, 6700, 18, 3400, 21000]; // Posibles montos
 

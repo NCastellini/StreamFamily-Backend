@@ -1,7 +1,7 @@
 import { HttpError } from '../../utils/HttpError';
 import { listQuery } from '../../utils/listQuery';
 import { pagosMock } from './pagos.mock';
-import { CreatePagoDto, Pago, UpdatePagoDto } from './pagos.types';
+import type { CreatePagoDto, Pago, UpdatePagoDto } from './pagos.types';
 
 let pagos: Pago[] = [...pagosMock];
 let nextId = Math.max(...pagos.map((p) => p.id)) + 1;
