@@ -5,6 +5,7 @@ import {
   deleteGrupo,
   deleteMiembro,
   getGrupo,
+  getResumenGrupo,
   listGrupos,
   replaceGrupo,
   updateGrupo,
@@ -18,6 +19,7 @@ import {
 export const gruposRouter = Router();
 
 gruposRouter.get('/', listGrupos);
+gruposRouter.get('/:id/resumen', getResumenGrupo);
 gruposRouter.get('/:id', getGrupo);
 gruposRouter.post('/', createGrupo);
 gruposRouter.put('/:id', replaceGrupo);
