@@ -1,8 +1,13 @@
 import { Router } from 'express';
+import * as c from './pagos.controller';
+import { validarCreate, validarUpdate } from './pagos.validation';
 
-/**
- * Módulo: Historial de pagos
- * Responsable: Julián Peralta
- * Montado en: /api/v1/pagos
- */
 export const pagosRouter = Router();
+
+pagosRouter.get('/total', c.total);
+pagosRouter.get('/', c.list);
+pagosRouter.get('/:id', c.getById);
+pagosRouter.post('/', validarCreate, c.create);
+pagosRouter.put('/:id', validarUpdate, c.update);
+pagosRouter.patch('/:id', validarUpdate, c.update);
+pagosRouter.delete('/:id', c.remove);
