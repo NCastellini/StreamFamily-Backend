@@ -1,8 +1,9 @@
 import type { ListResult } from '../../types/api.types';
 import { HttpError } from '../../utils/HttpError';
 import { listQuery } from '../../utils/listQuery';
+import { getAll as getAllSuscripciones } from '../suscripciones/suscripciones.service';
 import { gruposMock } from './grupos.mock';
-import type { CreateGrupoDto, Grupo, UpdateGrupoDto } from './grupos.types';
+import type { CreateGrupoDto, Grupo, ResumenGrupo, UpdateGrupoDto } from './grupos.types';
 
 const SORT_FIELDS = ['id', 'nombre', 'administradorId', 'creadoEn'] as const;
 
@@ -49,6 +50,16 @@ function parseUsuarioIdFilter(value: unknown): number | undefined {
   return Number.isSafeInteger(usuarioId) && usuarioId >= 1 ? usuarioId : undefined;
 }
 
+function roundToTwoDecimals(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function monthlyCost(cost: number, frequency: 'mensual' | 'trimestral' | 'anual'): number {
+  if (frequency === 'trimestral') return cost / 3;
+  if (frequency === 'anual') return cost / 12;
+  return cost;
+}
+
 export function list(rawQuery: Record<string, unknown>): ListResult<Grupo> {
   const usuarioId = parseUsuarioIdFilter(rawQuery.usuarioId);
   const grupos =
@@ -72,6 +83,29 @@ export function getById(id: number): Grupo {
   }
 
   return grupo;
+}
+
+export function getSummary(id: number): ResumenGrupo {
+  const grupo = getById(id);
+  const subscriptions = getAllSuscripciones().filter(
+    (subscription) => subscription.grupoId === id && subscription.estado === 'activa',
+  );
+  const subtotal = { ARS: 0, USD: 0 };
+
+  for (const subscription of subscriptions) {
+    subtotal[subscription.moneda] += monthlyCost(subscription.costo, subscription.frecuencia);
+  }
+
+  return {
+    grupoId: grupo.id,
+    nombre: grupo.nombre,
+    cantidadMiembros: grupo.miembros.length,
+    suscripcionesActivas: subscriptions.length,
+    subtotalMensual: {
+      ARS: roundToTwoDecimals(subtotal.ARS),
+      USD: roundToTwoDecimals(subtotal.USD),
+    },
+  };
 }
 
 export function create(dto: CreateGrupoDto): Grupo {

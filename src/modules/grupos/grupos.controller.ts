@@ -27,6 +27,15 @@ export function getGrupo(req: Request, res: Response, next: NextFunction): void 
   }
 }
 
+export function getResumenGrupo(req: Request, res: Response, next: NextFunction): void {
+  try {
+    const id = parsePositiveId(req.params.id, 'id');
+    ok(res, gruposService.getSummary(id));
+  } catch (error) {
+    next(error);
+  }
+}
+
 export function createGrupo(req: Request, res: Response, next: NextFunction): void {
   try {
     const dto = validateCreateGrupo(req.body);
