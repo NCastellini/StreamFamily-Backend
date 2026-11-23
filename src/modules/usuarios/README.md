@@ -12,7 +12,7 @@ Responsable: Román Strizzi. Base: `/api/v1/usuarios`.
 - `email` y `username` son únicos y se normalizan a minúsculas.
 - Los datos viven en memoria y se reinician al reiniciar el proceso.
 - Estados: `activo`, `bloqueado` e `inactivo` (baja lógica).
-- Pendiente actualizar el enum `estado_usuario` de los PDFs del DER con `inactivo`.
+- El enum `estado_usuario` del DER en `docs/` incluye los tres estados.
 
 ## Usuarios de prueba
 
@@ -84,11 +84,13 @@ grupos, suscripciones ni alertas: su tratamiento se acordará al integrar.
 
 `verifyCredentials(identifier, password)` acepta email o username y devuelve
 el usuario público o `null`. Rechaza contraseñas incorrectas y usuarios
-bloqueados o inactivos. Auth debe usar este servicio, sin importar el mock.
+bloqueados o inactivos. Auth usa este servicio, sin importar el mock.
 `getById(id)` también acepta IDs numéricos para los consumidores internos.
 
-La emisión de JWT, login/register/recover y la protección de rutas corresponden
-a Nazareno. Estas rutas todavía no aplican autenticación.
+Auth emite el JWT mediante el trabajo de Nazareno. Todas las rutas de Usuarios
+aplican `verifyToken` y `requireRole('admin')` del middleware compartido.
+Sin JWT válido devuelven 401; con rol cliente devuelven 403.
+Las pruebas del módulo obtienen el token mediante el login real.
 
 ## Reset de contraseña: simulación de la etapa actual
 
@@ -103,7 +105,7 @@ no un restablecimiento funcional ni un flujo de recuperación completo.
 - No genera tokens de recuperación ni envía correos.
 - No devuelve contraseñas ni hashes.
 
-**Pendiente para la funcionalidad final exigida por la propuesta del proyecto:**
+**Fuera del alcance del prototipo; evolución futura de la propuesta original:**
 definir e implementar el restablecimiento efectivo con Auth, sus validaciones,
 autorización y pruebas. Queda por acordar también el tratamiento de cuentas
 inactivas. La propuesta de recibir `nuevaPassword` y rechazar cuentas inactivas
