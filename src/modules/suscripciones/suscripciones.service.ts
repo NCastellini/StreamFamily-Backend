@@ -1,8 +1,10 @@
 import type { ListResult } from '../../types/api.types';
 import { HttpError } from '../../utils/HttpError';
 import { listQuery } from '../../utils/listQuery';
+import * as categoriasService from '../categorias/categorias.service';
 import { gruposMock } from '../grupos/grupos.mock';
 import { mediosPagoMock } from '../medios-pago/medios-pago.mock';
+import * as usuariosService from '../usuarios/usuarios.service';
 import { suscripcionesMock } from './suscripciones.mock';
 import type {
   CreateSuscripcionDto,
@@ -43,6 +45,17 @@ const SORT_FIELDS = [
 
 let nextId = Math.max(0, ...suscripcionesMock.map((s) => s.id)) + 1;
 
+/** true si getById encuentra el registro; false si responde 404 */
+function existe(buscar: () => unknown): boolean {
+  try {
+    buscar();
+    return true;
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 404) return false;
+    throw error;
+  }
+}
+
 /** Verifica que los IDs que apuntan a otras entidades existan */
 function ensureReferences(s: Suscripcion): void {
   if (!mediosPagoMock.some((m) => m.id === s.medioPagoId)) {
@@ -51,7 +64,12 @@ function ensureReferences(s: Suscripcion): void {
   if (s.grupoId !== null && !gruposMock.some((g) => g.id === s.grupoId)) {
     throw HttpError.badRequest(`No existe el grupo ${s.grupoId}`);
   }
-  // TODO: validar categoriaId y usuarioId cuando estén los mocks de Román en dev
+  if (!existe(() => categoriasService.getById(s.categoriaId))) {
+    throw HttpError.badRequest(`No existe la categoría ${s.categoriaId}`);
+  }
+  if (!existe(() => usuariosService.getById(s.usuarioId))) {
+    throw HttpError.badRequest(`No existe el usuario ${s.usuarioId}`);
+  }
 }
 
 function findIndexOrThrow(id: number): number {
