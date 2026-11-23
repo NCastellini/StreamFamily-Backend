@@ -5,12 +5,11 @@ Responsable: Román Strizzi. Endpoint: `GET /api/v1/admin/metricas`.
 ## Estado de integración
 
 El router, el controlador, la lectura paginada y los cálculos están implementados.
-Los proveedores de Grupos y Suscripciones aún no están conectados en esta rama.
-Grupos ya tiene service en el remoto revisado; Suscripciones todavía no.
-Hasta conectar ambos, el endpoint responde **503** con un mensaje explícito.
-No devuelve cifras ficticias ni interpreta dependencias faltantes como cero.
+Los proveedores de Grupos y Suscripciones están conectados por defecto con
+sus services. El endpoint devuelve **200** con los datos agregados actuales
+para un administrador autenticado. No importa mocks externos.
 
-Cuando ambos services estén disponibles, configurar una vez durante el inicio:
+Para sustituir los proveedores (por ejemplo, en pruebas) se puede utilizar:
 
 ```ts
 import * as gruposService from '../grupos/grupos.service';
@@ -23,10 +22,12 @@ configureMetricasSources({
 });
 ```
 
-Este ejemplo debe incorporarse al código de integración cuando existan los
-imports. Los services deben cumplir `ListResult<T>` y aceptar las consultas
-comunes. Se leen todas las páginas, no solo los primeros 10 o 100 registros.
-Usuarios se consulta mediante su service. No se importan mocks externos.
+No es necesario configurar los proveedores durante el inicio: ya están
+inicializados en el service de Métricas. Deben cumplir `ListResult<T>` y
+aceptar las consultas comunes. Se leen todas las páginas de Usuarios,
+Grupos y Suscripciones, no solo los primeros 10 o 100 registros.
+Si las fuentes se desconfiguran o devuelven paginación inconsistente,
+responde **503** en lugar de publicar totales parciales.
 
 ## Definición acordada de los cálculos
 
@@ -53,7 +54,10 @@ La cotización debe acordarse con Julián y compartirse con Dashboard;
 el valor provisional no representa una cotización real. Se calcula gasto contratado, no pagos efectivamente
 realizados; por eso no se consulta Pagos para este indicador.
 
-Pendiente de Nazareno: protección con JWT y rol admin.
+Protección integrada con `verifyToken` y `requireRole('admin')` del middleware
+compartido: sin JWT válido devuelve 401 y con rol cliente devuelve 403.
+Las pruebas incluyen login real, el endpoint conectado por defecto,
+cambios en los services y respuestas sin detalles individuales.
 
 ```bash
 node --import tsx --test src/modules/metricas/metricas.test.ts

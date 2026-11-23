@@ -1,6 +1,8 @@
 import type { ListResult } from '../../types/api.types';
 import { HttpError } from '../../utils/HttpError';
 import { MAX_LIMIT } from '../../utils/listQuery';
+import { list as listGrupos } from '../grupos/grupos.service';
+import { list as listSuscripciones } from '../suscripciones/suscripciones.service';
 import { list as listUsuarios } from '../usuarios/usuarios.service';
 import type {
   GrupoMetricas,
@@ -12,9 +14,9 @@ import type {
 
 // Cotización ficticia del prototipo; debe compartirse con Dashboard al integrar.
 export const COTIZACION_USD_ARS_MOCK = 1200;
-let sources: MetricasSources | undefined;
+let sources: MetricasSources | undefined = { listGrupos, listSuscripciones };
 
-export function configureMetricasSources(value: MetricasSources): void {
+export function configureMetricasSources(value: MetricasSources | undefined): void {
   sources = value;
 }
 
@@ -112,7 +114,8 @@ export function calculateMetricas(
 }
 
 export async function getMetricas(): Promise<Metricas> {
-  if (!sources) {
+  const currentSources = sources;
+  if (!currentSources) {
     throw new HttpError(
       503,
       'Métricas pendientes de integrar con los servicios de grupos y suscripciones',
@@ -120,8 +123,8 @@ export async function getMetricas(): Promise<Metricas> {
   }
   const [usuarios, grupos, suscripciones] = await Promise.all([
     readAll(listUsuarios),
-    readAll(sources.listGrupos),
-    readAll(sources.listSuscripciones),
+    readAll(currentSources.listGrupos),
+    readAll(currentSources.listSuscripciones),
   ]);
   return calculateMetricas(usuarios, grupos, suscripciones);
 }
