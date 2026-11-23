@@ -3,11 +3,15 @@ import type { Server } from 'node:http';
 import { after, before, test } from 'node:test';
 import { app } from '../../app';
 import type { ApiResponse } from '../../types/api.types';
+import { login } from '../auth/auth.service';
+import * as suscripciones from '../suscripciones/suscripciones.service';
 import { getById } from './categorias.service';
 import type { Categoria } from './categorias.types';
 
 let server: Server;
 let baseUrl: string;
+let adminToken: string;
+let clientToken: string;
 
 before(async () => {
   await new Promise<void>((resolve, reject) => {
@@ -19,6 +23,8 @@ before(async () => {
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
   baseUrl = `http://127.0.0.1:${address.port}/api/v1/categorias`;
+  adminToken = (await login({ identifier: 'lucia.fernandez', password: 'AdminDemo123!' })).token;
+  clientToken = (await login({ identifier: 'martin.gomez', password: 'ClienteDemo123!' })).token;
 });
 
 after(async () => {
@@ -31,7 +37,10 @@ after(async () => {
 async function request<T = Categoria>(path = '', method = 'GET', body?: unknown) {
   const response = await fetch(baseUrl + path, {
     method,
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${adminToken}`,
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = (await response.json()) as ApiResponse<T>;
@@ -40,6 +49,24 @@ async function request<T = Categoria>(path = '', method = 'GET', body?: unknown)
 }
 
 test('Categorías: contrato, búsqueda, validación y CRUD', async (t) => {
+  await t.test('Lectura autenticada y escritura solo para administradores', async () => {
+    const routes = [
+      ['', 'GET'],
+      ['/1', 'GET'],
+      ['', 'POST'],
+      ['/1', 'PUT'],
+      ['/1', 'PATCH'],
+      ['/1', 'DELETE'],
+    ];
+    for (const [path, method] of routes) {
+      assert.equal((await fetch(baseUrl + path, { method })).status, 401);
+      const result = await fetch(baseUrl + path, {
+        method,
+        headers: { Authorization: `Bearer ${clientToken}` },
+      });
+      assert.equal(result.status, method === 'GET' ? 200 : 403);
+    }
+  });
   await t.test('Seis IDs, búsqueda sin tildes y paginación', async () => {
     const all = await request<Categoria[]>();
     assert.equal(all.status, 200);
@@ -119,6 +146,38 @@ test('Categorías: contrato, búsqueda, validación y CRUD', async (t) => {
       assert.equal(result.status, 400);
       assert.equal(result.body.data, null);
     }
+    assert.equal((await request<Categoria[]>()).body.meta?.total, 6);
+  });
+
+  await t.test('No elimina categorías referenciadas en ningún estado de suscripción', async () => {
+    const categoria = (await request('', 'POST', { nombre: 'Referenciada', descripcion: '' })).body
+      .data;
+    const suscripcion = suscripciones.create({
+      plataforma: 'Prueba',
+      plan: 'Individual',
+      costo: 1,
+      moneda: 'ARS',
+      frecuencia: 'mensual',
+      fechaCobro: '2026-12-01',
+      estado: 'activa',
+      usuarioId: 2,
+      grupoId: null,
+      medioPagoId: 1,
+      categoriaId: categoria.id,
+    });
+    try {
+      for (const estado of ['activa', 'pausada', 'cancelada'] as const) {
+        suscripciones.update(suscripcion.id, { estado });
+        const result = await request<null>(`/${categoria.id}`, 'DELETE');
+        assert.equal(result.status, 409);
+        assert.equal(result.body.data, null);
+        assert.equal((await request(`/${categoria.id}`)).status, 200);
+      }
+    } finally {
+      suscripciones.remove(suscripcion.id);
+    }
+    assert.equal((await request(`/${categoria.id}`, 'DELETE')).status, 200);
+    assert.equal((await request(`/${categoria.id}`)).status, 404);
     assert.equal((await request<Categoria[]>()).body.meta?.total, 6);
   });
 });
