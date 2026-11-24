@@ -17,3 +17,12 @@ export interface Alerta {
 
 export type CreateAlertaDto = Omit<Alerta, 'id' | 'creadaEn'>;
 export type UpdateAlertaDto = Partial<CreateAlertaDto>;
+
+export interface ComprobanteEnvio {
+  alertaId: number;
+  canal: CanalAlerta;
+  destinatario: string;
+  suscripcionId: number;
+  fechaAviso: string;
+  enviadoEn: string;
+}

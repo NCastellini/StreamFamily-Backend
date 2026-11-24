@@ -1,8 +1,9 @@
 import type { ListResult } from '../../types/api.types';
 import { HttpError } from '../../utils/HttpError';
 import { listQuery } from '../../utils/listQuery';
+import * as usuariosService from '../usuarios/usuarios.service';
 import { alertasMock } from './alertas.mock';
-import type { Alerta, CreateAlertaDto, UpdateAlertaDto } from './alertas.types';
+import type { Alerta, ComprobanteEnvio, CreateAlertaDto, UpdateAlertaDto } from './alertas.types';
 
 const alertas: Alerta[] = alertasMock.map((alerta) => ({ ...alerta }));
 
@@ -96,4 +97,28 @@ export function remove(id: number): Alerta {
 
   alertas.splice(alertas.indexOf(alerta), 1);
   return alerta;
+}
+
+// Simula el envío del aviso: no envía nada real ni modifica la alerta.
+export function enviar(id: number): ComprobanteEnvio {
+  const alerta = getById(id);
+
+  if (alerta.estado === 'descartada') {
+    throw HttpError.conflict('La alerta está descartada y no se puede enviar');
+  }
+
+  const destinatario = usuariosService.getById(alerta.usuarioId).email;
+
+  console.log(
+    `[Alertas] Envío simulado → destinatario: ${destinatario} | alerta: ${alerta.id} | suscripción: ${alerta.suscripcionId} | fecha de aviso: ${alerta.fechaAviso}`,
+  );
+
+  return {
+    alertaId: alerta.id,
+    canal: alerta.canal,
+    destinatario,
+    suscripcionId: alerta.suscripcionId,
+    fechaAviso: alerta.fechaAviso,
+    enviadoEn: new Date().toISOString(),
+  };
 }

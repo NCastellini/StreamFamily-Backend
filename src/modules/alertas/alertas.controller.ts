@@ -31,3 +31,8 @@ export function eliminar(req: Request, res: Response): void {
   const alerta = alertasService.remove(Number(req.params.id));
   ok(res, alerta, { msg: 'Alerta eliminada' });
 }
+
+export function enviar(req: Request, res: Response): void {
+  const comprobante = alertasService.enviar(Number(req.params.id));
+  ok(res, comprobante, { msg: 'Alerta enviada' });
+}
