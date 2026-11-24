@@ -6,6 +6,7 @@ import {
   listar,
   modificar,
   obtener,
+  proximas,
   reemplazar,
 } from './alertas.controller';
 import { validarAlta, validarEdicion, validarId } from './alertas.validation';
@@ -13,8 +14,9 @@ import { validarAlta, validarEdicion, validarId } from './alertas.validation';
 /** Módulo: Alertas de vencimiento */
 export const alertasRouter = Router();
 
-// GET /proximas → se agrega en la Etapa 2. Tiene que ir ANTES de /:id
 alertasRouter.get('/', listar);
+// Va antes de /:id para que 'proximas' no se tome como id
+alertasRouter.get('/proximas', proximas);
 alertasRouter.get('/:id', validarId, obtener);
 alertasRouter.post('/', validarAlta, crear);
 alertasRouter.put('/:id', validarId, validarAlta, reemplazar);

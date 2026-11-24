@@ -7,6 +7,10 @@ export function listar(req: Request, res: Response): void {
   ok(res, data, { meta });
 }
 
+export function proximas(req: Request, res: Response): void {
+  ok(res, alertasService.proximas(req.query));
+}
+
 export function obtener(req: Request, res: Response): void {
   const alerta = alertasService.getById(Number(req.params.id));
   ok(res, alerta);
