@@ -1,6 +1,8 @@
 import type { ListResult } from '../../types/api.types';
 import { HttpError } from '../../utils/HttpError';
 import { listQuery } from '../../utils/listQuery';
+import * as suscripcionesService from '../suscripciones/suscripciones.service';
+import type { Suscripcion } from '../suscripciones/suscripciones.types';
 import * as usuariosService from '../usuarios/usuarios.service';
 import { alertasMock } from './alertas.mock';
 import type { Alerta, ComprobanteEnvio, CreateAlertaDto, UpdateAlertaDto } from './alertas.types';
@@ -23,6 +25,26 @@ function parseFecha(value: unknown): string | undefined {
   if (Number.isNaN(fecha.getTime())) return undefined;
 
   return fecha.toISOString().slice(0, 10) === raw ? raw : undefined;
+}
+
+// El 404 de Suscripciones se traduce a 422: acá el 404 indicaría que la alerta no existe.
+function obtenerSuscripcion(suscripcionId: number): Suscripcion {
+  try {
+    return suscripcionesService.getById(suscripcionId);
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 404) {
+      throw HttpError.unprocessable('La suscripción indicada no existe');
+    }
+    throw error;
+  }
+}
+
+function validarReferencias(suscripcionId: number, usuarioId: number): void {
+  const suscripcion = obtenerSuscripcion(suscripcionId);
+
+  if (suscripcion.usuarioId !== usuarioId) {
+    throw HttpError.unprocessable('El usuario indicado no es el dueño de la suscripción');
+  }
 }
 
 export function list(rawQuery: Record<string, unknown>): ListResult<Alerta> {
@@ -64,7 +86,8 @@ export function getById(id: number): Alerta {
 }
 
 export function create(dto: CreateAlertaDto): Alerta {
-  // TODO: validar que suscripcionId exista usando el service de Suscripciones cuando esté disponible.
+  validarReferencias(dto.suscripcionId, dto.usuarioId);
+
   const alerta: Alerta = {
     id: Math.max(0, ...alertas.map((item) => item.id)) + 1,
     suscripcionId: dto.suscripcionId,
@@ -81,8 +104,14 @@ export function create(dto: CreateAlertaDto): Alerta {
 }
 
 export function update(id: number, dto: UpdateAlertaDto): Alerta {
-  // TODO: validar que suscripcionId exista usando el service de Suscripciones cuando esté disponible.
   const actual = getById(id);
+
+  if (dto.suscripcionId !== undefined || dto.usuarioId !== undefined) {
+    validarReferencias(
+      dto.suscripcionId ?? actual.suscripcionId,
+      dto.usuarioId ?? actual.usuarioId,
+    );
+  }
 
   const cambios = Object.fromEntries(
     Object.entries(dto).filter(([, valor]) => valor !== undefined),
