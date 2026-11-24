@@ -7,6 +7,10 @@ export function listar(req: Request, res: Response): void {
   ok(res, data, { meta });
 }
 
+export function proximas(req: Request, res: Response): void {
+  ok(res, alertasService.proximas(req.query));
+}
+
 export function obtener(req: Request, res: Response): void {
   const alerta = alertasService.getById(Number(req.params.id));
   ok(res, alerta);
@@ -30,4 +34,9 @@ export function modificar(req: Request, res: Response): void {
 export function eliminar(req: Request, res: Response): void {
   const alerta = alertasService.remove(Number(req.params.id));
   ok(res, alerta, { msg: 'Alerta eliminada' });
+}
+
+export function enviar(req: Request, res: Response): void {
+  const comprobante = alertasService.enviar(Number(req.params.id));
+  ok(res, comprobante, { msg: 'Alerta enviada' });
 }
