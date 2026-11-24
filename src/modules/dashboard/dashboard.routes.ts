@@ -1,8 +1,8 @@
 import { Router } from 'express';
+import * as c from './dashboard.controller';
 
-/**
- * Módulo: Dashboard (gasto mensual/anual, distribución por categoría, próximas renovaciones)
- * Responsable: Julián Peralta
- * Montado en: /api/v1/dashboard
- */
 export const dashboardRouter = Router();
+
+dashboardRouter.get('/resumen', c.resumen);
+dashboardRouter.get('/categorias', c.categorias);
+dashboardRouter.get('/renovaciones', c.renovaciones);
