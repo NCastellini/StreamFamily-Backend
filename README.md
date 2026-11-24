@@ -45,6 +45,19 @@ Se definen en `.env` (no se sube al repo). La plantilla está en `sample.env`.
 | `npm run format`       | Formatea todo con Prettier                 |
 | `npm run format:check` | Verifica el formato sin modificar archivos |
 
+## Moneda de presentación del prototipo
+
+Dashboard y Métricas presentan sus resultados en **ARS**. Las suscripciones
+pueden registrar costos en ARS o USD:
+
+- Los importes en ARS se utilizan sin conversión.
+- Los importes en USD se convierten con una cotización mock fija de
+  **1 USD = 1200 ARS**, conservada para el prototipo en ambos módulos.
+- Es un valor ficticio de demostración, no una cotización real ni actualizada
+  automáticamente. Si cambia, debe actualizarse en ambos módulos.
+- Para los indicadores mensuales, el costo trimestral se divide por 3 y el anual
+  por 12; el mensual se utiliza sin dividir.
+
 ## Alertas
 
 Avisos de vencimiento de suscripciones. Base: `/api/v1/alertas` · Datos en memoria (se reinician al reiniciar el servidor).

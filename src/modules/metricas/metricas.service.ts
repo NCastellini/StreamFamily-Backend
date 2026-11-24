@@ -12,7 +12,7 @@ import type {
   UsuarioMetricas,
 } from './metricas.types';
 
-// Cotización ficticia del prototipo; debe compartirse con Dashboard al integrar.
+// Cotización mock fija del prototipo, igual que Dashboard; no es una cotización real.
 export const COTIZACION_USD_ARS_MOCK = 1200;
 let sources: MetricasSources | undefined = { listGrupos, listSuscripciones };
 
