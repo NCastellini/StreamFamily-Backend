@@ -3,10 +3,12 @@ import type { Server } from 'node:http';
 import { after, before, test } from 'node:test';
 import { app } from '../../app';
 import type { ApiResponse } from '../../types/api.types';
+import { login } from '../auth/auth.service';
 import type { Grupo, ResumenGrupo } from './grupos.types';
 
 let server: Server;
 let baseUrl: string;
+let clientToken: string;
 
 before(async () => {
   await new Promise<void>((resolve, reject) => {
@@ -19,6 +21,7 @@ before(async () => {
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
   baseUrl = `http://127.0.0.1:${address.port}/api/v1/grupos`;
+  clientToken = (await login({ identifier: 'martin.gomez', password: 'ClienteDemo123!' })).token;
 });
 
 after(async () => {
@@ -35,7 +38,10 @@ async function request<T>(
 ): Promise<{ status: number; body: ApiResponse<T> }> {
   const response = await fetch(baseUrl + path, {
     method,
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: `Bearer ${clientToken}`,
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = (await response.json()) as ApiResponse<T>;
