@@ -1,4 +1,4 @@
-import type { ListResult } from '../../types/api.types';
+import type { AuthUser, ListResult } from '../../types/api.types';
 import { HttpError } from '../../utils/HttpError';
 import { listQuery } from '../../utils/listQuery';
 import * as suscripcionesService from '../suscripciones/suscripciones.service';
@@ -46,12 +46,14 @@ export function update(id: number, dto: UpdateMedioPagoDto): MedioPago {
 }
 
 /** Suscripciones que se cobran con este medio de pago (paginadas como cualquier listado) */
+/** Suscripciones que se cobran con este medio de pago y que el usuario puede ver */
 export function listSuscripciones(
+  actor: AuthUser,
   id: number,
   rawQuery: Record<string, unknown>,
 ): ListResult<Suscripcion> {
   getById(id); // 404 si no existe
-  return suscripcionesService.list({ ...rawQuery, medioPagoId: String(id) });
+  return suscripcionesService.listFor(actor, { ...rawQuery, medioPagoId: String(id) });
 }
 
 export function remove(id: number): MedioPago {

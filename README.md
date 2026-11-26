@@ -194,6 +194,16 @@ Base: `/api/v1`. **Acceso:** 🔓 público · 🔑 con token · 👑 solo admin.
 | 409    | Se cambia al estado que ya tiene                                                           |
 | 409    | Se intenta borrar una suscripción con pagos o alertas (se cancela con `PATCH /:id/estado`) |
 
+**Acceso por usuario:** el admin ve y modifica todas. Un cliente ve las suyas y las de los grupos familiares de los que es miembro, pero solo modifica las suyas.
+
+| Código | Cuándo (cliente)                                                                         |
+| ------ | ---------------------------------------------------------------------------------------- |
+| 404    | La suscripción no existe o no la puede ver (mismo mensaje en los dos casos)              |
+| 403    | Modifica una suscripción de su grupo que no es suya                                      |
+| 403    | Crea o mueve una suscripción a nombre de otro usuario o a un grupo del que no es miembro |
+
+En los listados se ignora `?usuarioId=` para los clientes. `GET /medios-pago/:id/suscripciones` aplica la misma regla.
+
 ### Medios de pago · `/medios-pago`
 
 | Método | Ruta                 | Acceso | Descripción                                    |
