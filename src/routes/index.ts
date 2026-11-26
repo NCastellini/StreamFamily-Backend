@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { env } from '../config/env';
+import { verifyToken } from '../middlewares/auth.middleware';
 import { ok } from '../utils/response';
 
 import { alertasRouter } from '../modules/alertas/alertas.routes';
@@ -28,12 +29,12 @@ apiRouter.get('/health', (_req, res) => {
 
 /* Módulos, cada responsable trabaja solo dentro de src/modules/<modulo>/. */
 apiRouter.use('/auth', authRouter);
-apiRouter.use('/suscripciones', suscripcionesRouter);
-apiRouter.use('/medios-pago', mediosPagoRouter);
-apiRouter.use('/grupos', gruposRouter);
-apiRouter.use('/pagos', pagosRouter);
-apiRouter.use('/dashboard', dashboardRouter);
-apiRouter.use('/alertas', alertasRouter);
+apiRouter.use('/suscripciones', verifyToken, suscripcionesRouter);
+apiRouter.use('/medios-pago', verifyToken, mediosPagoRouter);
+apiRouter.use('/grupos', verifyToken, gruposRouter);
+apiRouter.use('/pagos', verifyToken, pagosRouter);
+apiRouter.use('/dashboard', verifyToken, dashboardRouter);
+apiRouter.use('/alertas', verifyToken, alertasRouter);
 apiRouter.use('/usuarios', usuariosRouter);
 apiRouter.use('/categorias', categoriasRouter);
 apiRouter.use('/admin/metricas', metricasRouter);

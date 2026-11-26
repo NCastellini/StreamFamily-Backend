@@ -45,14 +45,18 @@ responde **503** en lugar de publicar totales parciales.
 - El conteo de suscripciones activas y el ranking son globales: no se filtran
   por rol o estado del titular. Ese filtro se aplica únicamente al gasto promedio.
 - Normalización: costo mensual / 1, trimestral / 3 y anual / 12.
-- Moneda de referencia ARS, cotización provisional de demostración **1 USD = 1200 ARS**.
+- Moneda de presentación acordada para el prototipo: **ARS**.
+  Los costos en ARS no se convierten; los costos en USD se convierten con
+  la cotización mock fija **1 USD = 1200 ARS**, utilizada también por Dashboard.
   El resultado se redondea a dos decimales al final.
 
 Se incluyen `monedaReferencia`, `periodo` y `cotizacionUsdArs` para que el
 frontend pueda interpretar el importe. No se incluyen datos de clientes.
-La cotización debe acordarse con Julián y compartirse con Dashboard;
-el valor provisional no representa una cotización real. Se calcula gasto contratado, no pagos efectivamente
-realizados; por eso no se consulta Pagos para este indicador.
+La cotización mock se conserva para el prototipo: no representa una cotización
+real ni se actualiza automáticamente. Actualmente está definida en cada módulo;
+si se modifica, debe mantenerse el mismo valor en Métricas y Dashboard.
+Se calcula gasto contratado, no pagos efectivamente realizados; por eso no se
+consulta Pagos para este indicador.
 
 Protección integrada con `verifyToken` y `requireRole('admin')` del middleware
 compartido: sin JWT válido devuelve 401 y con rol cliente devuelve 403.
