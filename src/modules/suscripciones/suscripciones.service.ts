@@ -1,4 +1,5 @@
-import type { ListResult } from '../../types/api.types';
+import type { AuthUser, ListResult } from '../../types/api.types';
+import { esAdmin, exigirPropio } from '../../utils/acceso';
 import { HttpError } from '../../utils/HttpError';
 import { listQuery } from '../../utils/listQuery';
 import * as alertasService from '../alertas/alertas.service';
@@ -103,13 +104,15 @@ function findIndexOrThrow(id: number): number {
   return index;
 }
 
+const LIST_OPTIONS = {
+  searchFields: SEARCH_FIELDS,
+  filterFields: FILTER_FIELDS,
+  sortFields: SORT_FIELDS,
+  defaultSortBy: 'id',
+} as const;
+
 export function list(rawQuery: Record<string, unknown>): ListResult<Suscripcion> {
-  return listQuery(suscripcionesMock, rawQuery, {
-    searchFields: SEARCH_FIELDS,
-    filterFields: FILTER_FIELDS,
-    sortFields: SORT_FIELDS,
-    defaultSortBy: 'id',
-  });
+  return listQuery(suscripcionesMock, rawQuery, LIST_OPTIONS);
 }
 
 /** Devuelve todas (sin paginar). Útil para Dashboard, Alertas y Métricas. */
@@ -169,4 +172,99 @@ export function remove(id: number): Suscripcion {
   }
   const [removed] = suscripcionesMock.splice(index, 1);
   return removed;
+}
+
+/* ------------------------------------------------------------------
+ * Control de acceso por usuario
+ * Las funciones de arriba son de "sistema" (las usan Dashboard, Alertas,
+ * Grupos, Categorías y Métricas) y no cambian. Las rutas usan las
+ * funciones ...For, que reciben el usuario logueado (req.user).
+ * Admin: ve y modifica todo. Cliente: ve lo propio y lo de sus grupos;
+ * solo modifica lo propio.
+ * ------------------------------------------------------------------ */
+
+/** Se usa gruposMock (no grupos.service) para no formar una importación circular. */
+function esMiembroGrupo(grupoId: number, usuarioId: number): boolean {
+  return gruposMock.some((g) => g.id === grupoId && g.miembros.includes(usuarioId));
+}
+
+/** Dueño, admin, o miembro del grupo al que está asociada la suscripción. */
+export function puedeVer(actor: AuthUser, s: Suscripcion): boolean {
+  if (esAdmin(actor) || s.usuarioId === actor.id) return true;
+  return s.grupoId !== null && esMiembroGrupo(s.grupoId, actor.id);
+}
+
+/** Solo el dueño (o un admin) puede modificarla o borrarla. */
+export function esDueno(actor: AuthUser, s: Suscripcion): boolean {
+  return esAdmin(actor) || s.usuarioId === actor.id;
+}
+
+/** Ajena e invisible → 404 con el mismo mensaje que si no existiera. */
+function getVisible(actor: AuthUser, id: number): Suscripcion {
+  const suscripcion = getById(id);
+  if (!puedeVer(actor, suscripcion)) {
+    throw HttpError.notFound('Suscripción no encontrada');
+  }
+  return suscripcion;
+}
+
+/** Visible pero de otro usuario (por ejemplo, compartida en el grupo) → 403. */
+function getPropia(actor: AuthUser, id: number): Suscripcion {
+  const suscripcion = getVisible(actor, id);
+  if (!esDueno(actor, suscripcion)) {
+    throw HttpError.forbidden('Solo el dueño puede modificar esta suscripción');
+  }
+  return suscripcion;
+}
+
+/** No se puede asociar una suscripción a un grupo del que no se es miembro. */
+function exigirGrupoPropio(actor: AuthUser, grupoId: number | null | undefined): void {
+  if (grupoId === undefined || grupoId === null || esAdmin(actor)) return;
+  const existe = gruposMock.some((g) => g.id === grupoId);
+  // Si el grupo no existe, lo informa ensureReferences con un 400.
+  if (existe && !esMiembroGrupo(grupoId, actor.id)) {
+    throw HttpError.forbidden('No es miembro del grupo indicado');
+  }
+}
+
+export function listFor(
+  actor: AuthUser,
+  rawQuery: Record<string, unknown>,
+): ListResult<Suscripcion> {
+  if (esAdmin(actor)) return list(rawQuery);
+  // Un cliente no puede pedir datos de otro con ?usuarioId=
+  const { usuarioId: _ignorado, ...query } = rawQuery;
+  const visibles = suscripcionesMock.filter((s) => puedeVer(actor, s));
+  return listQuery(visibles, query, LIST_OPTIONS);
+}
+
+export function getByIdFor(actor: AuthUser, id: number): Suscripcion {
+  return getVisible(actor, id);
+}
+
+export function createFor(actor: AuthUser, dto: CreateSuscripcionDto): Suscripcion {
+  exigirPropio(actor, dto.usuarioId);
+  exigirGrupoPropio(actor, dto.grupoId);
+  return create(dto);
+}
+
+export function updateFor(actor: AuthUser, id: number, dto: UpdateSuscripcionDto): Suscripcion {
+  getPropia(actor, id);
+  if (dto.usuarioId !== undefined) exigirPropio(actor, dto.usuarioId);
+  exigirGrupoPropio(actor, dto.grupoId);
+  return update(id, dto);
+}
+
+export function changeEstadoFor(
+  actor: AuthUser,
+  id: number,
+  estado: EstadoSuscripcion,
+): Suscripcion {
+  getPropia(actor, id);
+  return changeEstado(id, estado);
+}
+
+export function removeFor(actor: AuthUser, id: number): Suscripcion {
+  getPropia(actor, id);
+  return remove(id);
 }
