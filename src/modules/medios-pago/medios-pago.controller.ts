@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import { HttpError } from '../../utils/HttpError';
 import { created, ok } from '../../utils/response';
 import { parsePositiveId } from '../suscripciones/suscripciones.validation';
 import * as mediosPagoService from './medios-pago.service';
@@ -25,7 +26,8 @@ export function getMedioPago(req: Request, res: Response, next: NextFunction): v
 export function listSuscripcionesDeMedio(req: Request, res: Response, next: NextFunction): void {
   try {
     const id = parsePositiveId(req.params.id);
-    const { data, meta } = mediosPagoService.listSuscripciones(id, req.query);
+    if (!req.user) throw HttpError.unauthorized();
+    const { data, meta } = mediosPagoService.listSuscripciones(req.user, id, req.query);
     ok(res, data, { meta });
   } catch (error) {
     next(error);
