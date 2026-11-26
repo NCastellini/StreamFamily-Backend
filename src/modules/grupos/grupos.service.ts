@@ -1,4 +1,5 @@
-import type { ListResult } from '../../types/api.types';
+import type { AuthUser, ListResult } from '../../types/api.types';
+import { esAdmin, exigirAcceso, exigirPropio } from '../../utils/acceso';
 import { HttpError } from '../../utils/HttpError';
 import { listQuery } from '../../utils/listQuery';
 import { getAll as getAllSuscripciones } from '../suscripciones/suscripciones.service';
@@ -181,4 +182,59 @@ export function removeMember(id: number, usuarioId: number): Grupo {
 
   grupo.miembros = grupo.miembros.filter((miembroId) => miembroId !== usuarioId);
   return grupo;
+}
+
+export function esMiembro(grupoId: number, usuarioId: number): boolean {
+  return gruposMock.some((grupo) => grupo.id === grupoId && grupo.miembros.includes(usuarioId));
+}
+
+export function listFor(actor: AuthUser, query: Record<string, unknown>): ListResult<Grupo> {
+  return list(esAdmin(actor) ? query : { ...query, usuarioId: String(actor.id) });
+}
+
+export function getByIdFor(actor: AuthUser, id: number): Grupo {
+  const grupo = getById(id);
+  exigirAcceso(esAdmin(actor) || grupo.miembros.includes(actor.id), 'Grupo');
+  return grupo;
+}
+
+export function getSummaryFor(actor: AuthUser, id: number): ResumenGrupo {
+  getByIdFor(actor, id);
+  return getSummary(id);
+}
+
+export function createFor(actor: AuthUser, dto: CreateGrupoDto): Grupo {
+  exigirPropio(actor, dto.administradorId);
+  return create(dto);
+}
+
+function exigirAdministrador(actor: AuthUser, id: number): void {
+  const grupo = getByIdFor(actor, id);
+  if (!esAdmin(actor) && grupo.administradorId !== actor.id) {
+    throw HttpError.forbidden('Solo el administrador del grupo puede realizar esta acción');
+  }
+}
+
+export function updateFor(actor: AuthUser, id: number, dto: UpdateGrupoDto): Grupo {
+  exigirAdministrador(actor, id);
+  return update(id, dto);
+}
+
+export function removeFor(actor: AuthUser, id: number): Grupo {
+  exigirAdministrador(actor, id);
+  return remove(id);
+}
+
+export function addMemberFor(actor: AuthUser, id: number, usuarioId: number): Grupo {
+  exigirAdministrador(actor, id);
+  return addMember(id, usuarioId);
+}
+
+export function removeMemberFor(actor: AuthUser, id: number, usuarioId: number): Grupo {
+  if (usuarioId === actor.id) {
+    getByIdFor(actor, id);
+  } else {
+    exigirAdministrador(actor, id);
+  }
+  return removeMember(id, usuarioId);
 }
