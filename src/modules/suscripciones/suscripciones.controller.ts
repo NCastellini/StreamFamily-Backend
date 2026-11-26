@@ -1,4 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
+import type { AuthUser } from '../../types/api.types';
+import { HttpError } from '../../utils/HttpError';
 import { created, ok } from '../../utils/response';
 import * as suscripcionesService from './suscripciones.service';
 import {
@@ -9,9 +11,15 @@ import {
   validateUpdateSuscripcion,
 } from './suscripciones.validation';
 
+/** Usuario logueado (lo carga verifyToken en routes/index.ts). */
+function actor(req: Request): AuthUser {
+  if (!req.user) throw HttpError.unauthorized();
+  return req.user;
+}
+
 export function listSuscripciones(req: Request, res: Response, next: NextFunction): void {
   try {
-    const { data, meta } = suscripcionesService.list(req.query);
+    const { data, meta } = suscripcionesService.listFor(actor(req), req.query);
     ok(res, data, { meta });
   } catch (error) {
     next(error);
@@ -21,7 +29,7 @@ export function listSuscripciones(req: Request, res: Response, next: NextFunctio
 export function getSuscripcion(req: Request, res: Response, next: NextFunction): void {
   try {
     const id = parsePositiveId(req.params.id);
-    ok(res, suscripcionesService.getById(id));
+    ok(res, suscripcionesService.getByIdFor(actor(req), id));
   } catch (error) {
     next(error);
   }
@@ -30,7 +38,7 @@ export function getSuscripcion(req: Request, res: Response, next: NextFunction):
 export function createSuscripcion(req: Request, res: Response, next: NextFunction): void {
   try {
     const dto = validateCreateSuscripcion(req.body);
-    created(res, suscripcionesService.create(dto), 'Suscripción creada');
+    created(res, suscripcionesService.createFor(actor(req), dto), 'Suscripción creada');
   } catch (error) {
     next(error);
   }
@@ -40,7 +48,9 @@ export function replaceSuscripcion(req: Request, res: Response, next: NextFuncti
   try {
     const id = parsePositiveId(req.params.id);
     const dto = validateReplaceSuscripcion(req.body);
-    ok(res, suscripcionesService.update(id, dto), { msg: 'Suscripción actualizada' });
+    ok(res, suscripcionesService.updateFor(actor(req), id, dto), {
+      msg: 'Suscripción actualizada',
+    });
   } catch (error) {
     next(error);
   }
@@ -50,7 +60,9 @@ export function updateSuscripcion(req: Request, res: Response, next: NextFunctio
   try {
     const id = parsePositiveId(req.params.id);
     const dto = validateUpdateSuscripcion(req.body);
-    ok(res, suscripcionesService.update(id, dto), { msg: 'Suscripción actualizada' });
+    ok(res, suscripcionesService.updateFor(actor(req), id, dto), {
+      msg: 'Suscripción actualizada',
+    });
   } catch (error) {
     next(error);
   }
@@ -60,7 +72,9 @@ export function changeEstadoSuscripcion(req: Request, res: Response, next: NextF
   try {
     const id = parsePositiveId(req.params.id);
     const estado = validateEstadoBody(req.body);
-    ok(res, suscripcionesService.changeEstado(id, estado), { msg: 'Estado actualizado' });
+    ok(res, suscripcionesService.changeEstadoFor(actor(req), id, estado), {
+      msg: 'Estado actualizado',
+    });
   } catch (error) {
     next(error);
   }
@@ -69,7 +83,7 @@ export function changeEstadoSuscripcion(req: Request, res: Response, next: NextF
 export function deleteSuscripcion(req: Request, res: Response, next: NextFunction): void {
   try {
     const id = parsePositiveId(req.params.id);
-    ok(res, suscripcionesService.remove(id), { msg: 'Suscripción eliminada' });
+    ok(res, suscripcionesService.removeFor(actor(req), id), { msg: 'Suscripción eliminada' });
   } catch (error) {
     next(error);
   }
