@@ -54,9 +54,14 @@ function rejectUnknownFields(body: UnknownRecord, allowed: Set<string>): void {
   }
 }
 
+const MAX_TEXTO = 100;
+
 function parseText(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.trim() === '') {
     throw HttpError.badRequest(`El campo ${field} es obligatorio y debe ser texto`);
+  }
+  if (value.trim().length > MAX_TEXTO) {
+    throw HttpError.badRequest(`El campo ${field} no puede superar los ${MAX_TEXTO} caracteres`);
   }
   return value.trim();
 }
