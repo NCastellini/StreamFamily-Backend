@@ -9,6 +9,7 @@ import type { Grupo, ResumenGrupo } from './grupos.types';
 let server: Server;
 let baseUrl: string;
 let clientToken: string;
+let adminToken: string;
 
 before(async () => {
   await new Promise<void>((resolve, reject) => {
@@ -22,6 +23,7 @@ before(async () => {
   assert.ok(address && typeof address !== 'string');
   baseUrl = `http://127.0.0.1:${address.port}/api/v1/grupos`;
   clientToken = (await login({ identifier: 'martin.gomez', password: 'ClienteDemo123!' })).token;
+  adminToken = (await login({ identifier: 'lucia.fernandez', password: 'AdminDemo123!' })).token;
 });
 
 after(async () => {
@@ -35,11 +37,12 @@ async function request<T>(
   path: string,
   method = 'GET',
   body?: unknown,
+  token = adminToken,
 ): Promise<{ status: number; body: ApiResponse<T> }> {
   const response = await fetch(baseUrl + path, {
     method,
     headers: {
-      Authorization: `Bearer ${clientToken}`,
+      Authorization: `Bearer ${token}`,
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -94,4 +97,44 @@ test('Resumen de Grupos: monedas, frecuencias y errores', async (t) => {
     assert.equal((await request<null>('/999/resumen')).status, 404);
     assert.equal((await request<null>('/abc/resumen')).status, 400);
   });
+});
+
+test('Grupos: acceso por pertenencia y administración', async () => {
+  const cliente = <T>(path: string, method = 'GET', body?: unknown) =>
+    request<T>(path, method, body, clientToken);
+
+  for (const query of ['', '?usuarioId=3']) {
+    const result = await cliente<Grupo[]>(query);
+    assert.equal(result.status, 200);
+    assert.deepEqual(result.body.data.map((grupo) => grupo.id), [1]);
+    assert.equal(result.body.meta?.total, 1);
+  }
+
+  const dto = { nombre: 'Grupo de prueba de permisos', administradorId: 3, miembros: [3, 2] };
+  assert.equal((await cliente('/4')).status, 404);
+  assert.equal((await cliente('/4/resumen')).status, 404);
+  assert.equal((await cliente('/4', 'PATCH', { nombre: dto.nombre })).status, 404);
+  assert.equal((await cliente('/4/miembros', 'POST', { usuarioId: 2 })).status, 404);
+  assert.equal((await cliente('', 'POST', dto)).status, 403);
+
+  const grupo = await request<Grupo>('', 'POST', dto);
+  assert.equal(grupo.status, 201);
+  const path = `/${grupo.body.data.id}`;
+  assert.equal((await cliente(path + '/resumen')).status, 200);
+  assert.equal((await cliente(path, 'PUT', dto)).status, 403);
+  assert.equal((await cliente(path, 'PATCH', { nombre: 'Otro nombre' })).status, 403);
+  assert.equal((await cliente(path, 'DELETE')).status, 403);
+  assert.equal((await cliente(path + '/miembros', 'POST', { usuarioId: 5 })).status, 403);
+  assert.equal((await cliente(path + '/miembros/3', 'DELETE')).status, 403);
+  assert.equal((await cliente(path + '/miembros/2', 'DELETE')).status, 200);
+  assert.equal((await cliente(path)).status, 404);
+  assert.equal((await request(path, 'DELETE')).status, 200);
+
+  const propio = await cliente<Grupo>('', 'POST', { ...dto, administradorId: 2 });
+  assert.equal(propio.status, 201);
+  const miGrupo = `/${propio.body.data.id}`;
+  assert.equal((await cliente(miGrupo, 'PATCH', { nombre: 'Grupo editado' })).status, 200);
+  assert.equal((await cliente(miGrupo + '/miembros', 'POST', { usuarioId: 5 })).status, 201);
+  assert.equal((await cliente(miGrupo + '/miembros/5', 'DELETE')).status, 200);
+  assert.equal((await cliente(miGrupo, 'DELETE')).status, 200);
 });
