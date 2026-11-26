@@ -1,9 +1,11 @@
 import type { ListResult } from '../../types/api.types';
 import { HttpError } from '../../utils/HttpError';
 import { listQuery } from '../../utils/listQuery';
+import * as alertasService from '../alertas/alertas.service';
 import * as categoriasService from '../categorias/categorias.service';
 import { gruposMock } from '../grupos/grupos.mock';
 import { mediosPagoMock } from '../medios-pago/medios-pago.mock';
+import * as pagosService from '../pagos/pagos.service';
 import * as usuariosService from '../usuarios/usuarios.service';
 import { suscripcionesMock } from './suscripciones.mock';
 import type {
@@ -72,6 +74,27 @@ function ensureReferences(s: Suscripcion): void {
   }
 }
 
+/** Solo se asignan suscripciones a usuarios activos (no bloqueados ni dados de baja). */
+function ensureUsuarioActivo(usuarioId: number): void {
+  if (!existe(() => usuariosService.getById(usuarioId))) return; // lo informa ensureReferences
+  if (usuariosService.getById(usuarioId).estado !== 'activo') {
+    throw HttpError.badRequest(`El usuario ${usuarioId} no está activo`);
+  }
+}
+
+/**
+ * Cantidad de pagos y alertas asociados.
+ * Pagos y Alertas se consultan dentro de la función (nunca al cargar el archivo)
+ * porque Alertas ya importa este service: así la importación circular no falla.
+ */
+function contarAsociados(id: number): { pagos: number; alertas: number } {
+  const query = { suscripcionId: String(id), limit: '1' };
+  return {
+    pagos: pagosService.list(query).meta.total,
+    alertas: alertasService.list(query).meta.total,
+  };
+}
+
 function findIndexOrThrow(id: number): number {
   const index = suscripcionesMock.findIndex((s) => s.id === id);
   if (index === -1) {
@@ -106,6 +129,7 @@ export function create(dto: CreateSuscripcionDto): Suscripcion {
   };
 
   ensureReferences(suscripcion);
+  ensureUsuarioActivo(suscripcion.usuarioId);
   nextId += 1;
   suscripcionesMock.push(suscripcion);
   return suscripcion;
@@ -116,6 +140,7 @@ export function update(id: number, dto: UpdateSuscripcionDto): Suscripcion {
   const updated: Suscripcion = { ...suscripcionesMock[index], ...dto };
 
   ensureReferences(updated);
+  if (dto.usuarioId !== undefined) ensureUsuarioActivo(dto.usuarioId);
   suscripcionesMock[index] = updated;
   return updated;
 }
@@ -135,6 +160,13 @@ export function changeEstado(id: number, estado: EstadoSuscripcion): Suscripcion
 
 export function remove(id: number): Suscripcion {
   const index = findIndexOrThrow(id);
+  const asociados = contarAsociados(id);
+  if (asociados.pagos > 0 || asociados.alertas > 0) {
+    throw HttpError.conflict(
+      'No se puede eliminar: la suscripción tiene pagos o alertas asociados. Cancelela con PATCH /suscripciones/:id/estado',
+      asociados,
+    );
+  }
   const [removed] = suscripcionesMock.splice(index, 1);
   return removed;
 }

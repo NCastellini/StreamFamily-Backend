@@ -186,7 +186,13 @@ Base: `/api/v1`. **Acceso:** 🔓 público · 🔑 con token · 👑 solo admin.
 }
 ```
 
-Devuelve 400 si `medioPagoId`, `categoriaId`, `usuarioId` o `grupoId` no existen, y 409 si se cambia al estado que ya tiene.
+| Código | Cuándo                                                                                     |
+| ------ | ------------------------------------------------------------------------------------------ |
+| 400    | `medioPagoId`, `categoriaId`, `usuarioId` o `grupoId` no existen                           |
+| 400    | El usuario está bloqueado o dado de baja                                                   |
+| 400    | `plataforma` o `plan` superan los 100 caracteres                                           |
+| 409    | Se cambia al estado que ya tiene                                                           |
+| 409    | Se intenta borrar una suscripción con pagos o alertas (se cancela con `PATCH /:id/estado`) |
 
 ### Medios de pago · `/medios-pago`
 
