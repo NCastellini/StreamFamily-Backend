@@ -309,11 +309,14 @@ Avisos de vencimiento de suscripciones. Base: `/api/v1/alertas` · Datos en memo
 }
 ```
 
+**Acceso por usuario:** el admin ve y modifica todas las alertas. Un cliente solo ve y modifica sus propias alertas; en el listado se ignora `?usuarioId=`. `GET /proximas` muestra solo los vencimientos de las suscripciones que el usuario puede ver (las suyas y las de sus grupos familiares), y `tieneAlertaActiva` considera solo sus propias alertas.
+
 **Errores:**
 
-| Código | Cuándo                                                |
-| ------ | ----------------------------------------------------- |
-| 400    | Body o id inválido, campo no permitido, o PATCH vacío |
-| 404    | La alerta no existe                                   |
-| 409    | Se intenta enviar una alerta `descartada`             |
-| 422    | La suscripción no existe o el usuario no es su dueño  |
+| Código | Cuándo                                                                          |
+| ------ | ------------------------------------------------------------------------------- |
+| 400    | Body o id inválido, campo no permitido, o PATCH vacío                           |
+| 403    | Se intenta crear o mover una alerta a nombre de otro usuario                    |
+| 404    | La alerta no existe o pertenece a otro usuario (mismo mensaje en los dos casos) |
+| 409    | Se intenta enviar una alerta `descartada`                                       |
+| 422    | La suscripción no existe o el usuario no es su dueño                            |

@@ -1,7 +1,8 @@
-import type { ListResult } from '../../types/api.types';
+import type { AuthUser, ListResult } from '../../types/api.types';
+import { esAdmin, exigirPropio } from '../../utils/acceso';
 import { diasRestantes, hoyArgentina, proximoCobro, sumarDias } from '../../utils/fechas';
 import { HttpError } from '../../utils/HttpError';
-import { listQuery } from '../../utils/listQuery';
+import { listQuery, type ListQueryOptions } from '../../utils/listQuery';
 import * as suscripcionesService from '../suscripciones/suscripciones.service';
 import type { Suscripcion } from '../suscripciones/suscripciones.types';
 import * as usuariosService from '../usuarios/usuarios.service';
@@ -68,42 +69,51 @@ function validarReferencias(suscripcionId: number, usuarioId: number): void {
   }
 }
 
-export function list(rawQuery: Record<string, unknown>): ListResult<Alerta> {
+// Las opciones van explícitas porque, si no, listQuery toma los campos del primer elemento:
+// con el array vacío (por ejemplo, después de filtrar por desde/hasta) los filtros y el orden dejarían de funcionar.
+const LIST_OPTIONS: ListQueryOptions<Alerta> = {
+  filterFields: ['estado', 'suscripcionId', 'usuarioId'],
+  sortFields: [
+    'id',
+    'suscripcionId',
+    'usuarioId',
+    'diasAnticipacion',
+    'fechaAviso',
+    'estado',
+    'creadaEn',
+  ],
+  searchFields: ['estado', 'canal'],
+  defaultSortBy: 'id',
+};
+
+// Aplica desde/hasta y después filtros, orden y paginación sobre la base recibida.
+function listarDesde(
+  base: readonly Alerta[],
+  rawQuery: Record<string, unknown>,
+): ListResult<Alerta> {
   const desde = parseFecha(rawQuery.desde);
   const hasta = parseFecha(rawQuery.hasta);
 
-  const filtradas = alertas.filter(
+  const filtradas = base.filter(
     (alerta) =>
       (desde === undefined || alerta.fechaAviso >= desde) &&
       (hasta === undefined || alerta.fechaAviso <= hasta),
   );
 
-  // Las opciones van explícitas porque, si no, listQuery toma los campos del primer elemento:
-  // con el array vacío (por ejemplo, después de filtrar por desde/hasta) los filtros y el orden dejarían de funcionar.
-  return listQuery(filtradas, rawQuery, {
-    filterFields: ['estado', 'suscripcionId', 'usuarioId'],
-    sortFields: [
-      'id',
-      'suscripcionId',
-      'usuarioId',
-      'diasAnticipacion',
-      'fechaAviso',
-      'estado',
-      'creadaEn',
-    ],
-    searchFields: ['estado', 'canal'],
-    defaultSortBy: 'id',
-  });
+  return listQuery(filtradas, rawQuery, LIST_OPTIONS);
 }
 
-// getAll() devuelve el array del mock: se trabaja sobre copias (filter/map) y nunca se modifica.
-export function proximas(rawQuery: Record<string, unknown>): ProximoVencimiento[] {
+// Se trabaja sobre copias (filter/map): nunca se modifican los arrays recibidos.
+function calcularProximas(
+  suscripciones: readonly Suscripcion[],
+  alertasBase: readonly Alerta[],
+  rawQuery: Record<string, unknown>,
+): ProximoVencimiento[] {
   const dias = parseDias(rawQuery.dias);
   const hoy = hoyArgentina();
   const hasta = sumarDias(hoy, dias);
 
-  return suscripcionesService
-    .getAll()
+  return suscripciones
     .filter((suscripcion) => suscripcion.estado === 'activa')
     .map((suscripcion) => ({
       suscripcion,
@@ -119,13 +129,21 @@ export function proximas(rawQuery: Record<string, unknown>): ProximoVencimiento[
       frecuencia: suscripcion.frecuencia,
       proximoCobro: fecha,
       diasRestantes: diasRestantes(fecha, hoy),
-      tieneAlertaActiva: alertas.some(
+      tieneAlertaActiva: alertasBase.some(
         (alerta) => alerta.suscripcionId === suscripcion.id && alerta.estado === 'activa',
       ),
     }))
     .sort(
       (a, b) => a.proximoCobro.localeCompare(b.proximoCobro) || a.suscripcionId - b.suscripcionId,
     );
+}
+
+export function list(rawQuery: Record<string, unknown>): ListResult<Alerta> {
+  return listarDesde(alertas, rawQuery);
+}
+
+export function proximas(rawQuery: Record<string, unknown>): ProximoVencimiento[] {
+  return calcularProximas(suscripcionesService.getAll(), alertas, rawQuery);
 }
 
 export function getById(id: number): Alerta {
@@ -203,4 +221,72 @@ export function enviar(id: number): ComprobanteEnvio {
     fechaAviso: alerta.fechaAviso,
     enviadoEn: new Date().toISOString(),
   };
+}
+
+/* ------------------------------------------------------------------
+ * Control de acceso por usuario (issue #64)
+ * Las funciones de arriba son acceso interno "de sistema" (las usan otros
+ * módulos, como Suscripciones). Las rutas usan las funciones ...For, que
+ * reciben el usuario logueado (req.user).
+ * Admin: ve y modifica todo. Cliente: solo sus propias alertas.
+ * ------------------------------------------------------------------ */
+
+// Ajena → 404 con el mismo mensaje exacto que si no existiera, para no revelar que existe.
+function getAccesible(actor: AuthUser, id: number): Alerta {
+  const alerta = getById(id);
+
+  if (!esAdmin(actor) && alerta.usuarioId !== actor.id) {
+    throw HttpError.notFound('Alerta no encontrada');
+  }
+
+  return alerta;
+}
+
+export function listFor(actor: AuthUser, rawQuery: Record<string, unknown>): ListResult<Alerta> {
+  if (esAdmin(actor)) return list(rawQuery);
+
+  // Un cliente no puede pedir datos de otro con ?usuarioId=. Se filtra antes de paginar
+  // para que meta.total y las páginas sean correctos.
+  const { usuarioId: _ignorado, ...query } = rawQuery;
+  const propias = alertas.filter((alerta) => alerta.usuarioId === actor.id);
+  return listarDesde(propias, query);
+}
+
+export function proximasFor(
+  actor: AuthUser,
+  rawQuery: Record<string, unknown>,
+): ProximoVencimiento[] {
+  if (esAdmin(actor)) return proximas(rawQuery);
+
+  const visibles = suscripcionesService
+    .getAll()
+    .filter((suscripcion) => suscripcionesService.puedeVer(actor, suscripcion));
+  const propias = alertas.filter((alerta) => alerta.usuarioId === actor.id);
+  return calcularProximas(visibles, propias, rawQuery);
+}
+
+export function getByIdFor(actor: AuthUser, id: number): Alerta {
+  return getAccesible(actor, id);
+}
+
+export function createFor(actor: AuthUser, dto: CreateAlertaDto): Alerta {
+  exigirPropio(actor, dto.usuarioId);
+  return create(dto);
+}
+
+export function updateFor(actor: AuthUser, id: number, dto: UpdateAlertaDto): Alerta {
+  getAccesible(actor, id);
+  if (dto.usuarioId !== undefined) exigirPropio(actor, dto.usuarioId);
+  return update(id, dto);
+}
+
+export function removeFor(actor: AuthUser, id: number): Alerta {
+  getAccesible(actor, id);
+  return remove(id);
+}
+
+// El control va antes de enviar(): si la alerta es ajena no se registra ningún envío.
+export function enviarFor(actor: AuthUser, id: number): ComprobanteEnvio {
+  getAccesible(actor, id);
+  return enviar(id);
 }
