@@ -2,6 +2,9 @@ import type { Suscripcion } from '../suscripciones/suscripciones.types';
 import * as suscripciones from '../suscripciones/suscripciones.service';
 import * as categorias from '../categorias/categorias.service';
 import type { GastoCategoria, Renovacion, ResumenDashboard } from './dashboard.types';
+import { esDueno } from '../suscripciones/suscripciones.service';
+
+type Actor = NonNullable<Express.Request['user']>;
 
 const COTIZACION_USD_ARS = 1200; // mockeada
 const MONEDA_REF = 'ARS' as const;
@@ -20,12 +23,14 @@ const mensualArs = (s: Pick<Suscripcion, 'costo' | 'moneda' | 'frecuencia'>): nu
 
 const redondear = (n: number) => Math.round(n * 100) / 100;
 
-function activas() {
-  return suscripciones.list({ page: 1, limit: 1000, estado: 'activa' }).data;
+function activas(actor: Actor): Suscripcion[] {
+  return suscripciones
+    .getAll()
+    .filter((s) => s.estado === 'activa' && (actor.role === 'admin' || esDueno(actor, s)));
 }
 
-export function resumen(): ResumenDashboard {
-  const subs = activas();
+export function resumen(actor: Actor): ResumenDashboard {
+  const subs = activas(actor);
   const mensual = subs.reduce((acc, s) => acc + mensualArs(s), 0);
   return {
     monedaReferencia: MONEDA_REF,
@@ -36,8 +41,8 @@ export function resumen(): ResumenDashboard {
   };
 }
 
-export function porCategoria(): GastoCategoria[] {
-  const subs = activas();
+export function porCategoria(actor: Actor): GastoCategoria[] {
+  const subs = activas(actor);
   const totalMensual = subs.reduce((acc, s) => acc + mensualArs(s), 0);
   const acumulado = new Map<number, number>();
   subs.forEach((s) => acumulado.set(s.categoriaId, (acumulado.get(s.categoriaId) ?? 0) + mensualArs(s)));
@@ -52,12 +57,12 @@ export function porCategoria(): GastoCategoria[] {
     .sort((a, b) => b.gastoMensual - a.gastoMensual);
 }
 
-export function renovaciones(dias = 30): Renovacion[] {
+export function renovaciones(actor: Actor, dias = 30): Renovacion[] {
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
   const MS_DIA = 86_400_000;
 
-  return activas()
+  return activas(actor)
     .map((s) => ({
       suscripcionId: s.id,
       plataforma: s.plataforma,
