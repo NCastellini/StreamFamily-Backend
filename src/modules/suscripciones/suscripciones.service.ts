@@ -166,7 +166,7 @@ export function remove(id: number): Suscripcion {
   const asociados = contarAsociados(id);
   if (asociados.pagos > 0 || asociados.alertas > 0) {
     throw HttpError.conflict(
-      'No se puede eliminar: la suscripción tiene pagos o alertas asociados. Cancelela con PATCH /suscripciones/:id/estado',
+      'No se puede eliminar: la suscripción tiene pagos o alertas asociados. Cancelala en lugar de eliminarla.',
       asociados,
     );
   }
